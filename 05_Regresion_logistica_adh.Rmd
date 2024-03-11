@@ -1,0 +1,626 @@
+---
+title: "03_Regresion_adh"
+author: "Luis Miguel Pedraza Meza"
+date: "2023-10-12"
+output: 
+ html_document:                   
+    collapsed: true                # Contraer celdas de salida (creo...)
+    code_folding: show             # Mostrar el código
+    toc: true                      # Mostrar la tabla de contenidos
+    toc_depth: 3                   # Niveles de títulos que se mostrarán
+    toc_float: true                # Índices o contenidos flotantes 
+    smooth_scroll: true            # Activar el scroll
+    highlight: tango                # Destacar
+    df_print: paged                # Mostrar los dataframes en páginas
+    number_sections: true          # Numeración de contenidos
+    theme: united               # Tema
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Paso 1: Lectura de la base de datos.
+
+Es muy importante borrar los objetos del "enviroment" para que el espacio este los mas ordenado posible con el comando 
+*rm(list = ls())*
+
+```{r Lectura de la base de datos, include=F, echo=F}
+# library(readr)
+# NOTA: se actualizan las bases de datos con variables demográficas
+bd_sociales<-read_csv("bd_soc.adh.2.csv")
+bd_temporal<-read_csv("bd_eco.adh.2.csv")
+```
+
+```{r Curado de las bases de datos, include=F, echo=F}
+bd_sociales<-na.omit(bd_sociales)
+unique(bd_sociales$participant) # Para ver con cuantos participantes nos quedamos.
+# Seleccion de variables de interes
+names(bd_sociales)
+library(dplyr)
+bd_sociales2 <- bd_sociales %>%
+  select(sex___1, 
+         calculated_age,
+         age_group,
+         socioeconomic_status,
+         cal_totalcv,
+         key_resp_2.keys,
+         key_resp_2.rt,
+         opcionA,
+         opcionB,
+         Remisión,
+         dosis_GC,
+         corticosteroide,
+         scl90r_score_ans,
+         scl90r_score_dep,
+         scl90r_score_hos,
+         scl90r_score_fob,
+         scl90r_score_dep,
+         scl90r_score_para,
+         scl90r_score_som,
+         scl90r_score_oc,
+         scl90r_score_si,
+         est_dep,
+         ras_dep,
+         rasgo_resultado,
+         estado_resultado)
+# Renaming
+names(bd_sociales2)
+names(bd_sociales2)<-c("sex",
+                       "age",
+                       "age group",
+                       "socioeconomic status",
+                       "quality of life",
+                       "key_resp_2.keys",
+                       "reaction time",
+                       "personal cost",
+                       "punishment size",
+                       "remission",
+                       "glucocorticoids dose",
+                       "glucocorticoids consumption",
+                       "anxiety (SCL-90)",
+                       "depression (SCL-90)",
+                       "hostility (SCL-90)",
+                       "phobic anxiety (SCL-90)",
+                       "paranoid ideation (SCL-90)",
+                       "somatization (SCL-90)",
+                       "obsessive-compulsive (SCL-90)",
+                       "interpersonal sensitivity (SCL-90)",
+                       "state depression (ST-Dep)",
+                       "trait depression (ST-Dep)",
+                       "trait anxiety (STAI-T)",
+                       "state anxiety (STAI-S)")
+
+bd_temporal<-na.omit(bd_temporal)
+# library(dplyr)
+bd_temporal2 <- bd_temporal %>%
+  select(sex___1, 
+         calculated_age,
+         age_group,
+         socioeconomic_status,
+         cal_totalcv,
+         key_resp.keys,
+         key_resp.rt,
+         OpcionA,
+         OpcionB,
+         Remisión,
+         Esperando,
+         Tasa,
+         dosis_GC,
+         corticosteroide,
+         scl90r_score_ans,
+         scl90r_score_dep,
+         scl90r_score_hos,
+         scl90r_score_fob,
+         scl90r_score_dep,
+         scl90r_score_para,
+         scl90r_score_som,
+         scl90r_score_oc,
+         scl90r_score_si,
+         est_dep,
+         ras_dep,
+         rasgo_resultado,
+         estado_resultado)
+write.csv(bd_temporal2, "bd_social_english.csv")
+# Renaming variables
+names(bd_temporal2)<-c("sex",
+                       "age",
+                       "age group",
+                       "socioeconomic status",
+                       "quality of life",
+                       "key_resp.keys",
+                       "reaction time",
+                       "present reward",
+                       "future reward",
+                       "remission",
+                       "waiting time",
+                       "gaining rate",
+                       "glucocorticoids dose",
+                       "glucocorticoids consumption",
+                       "anxiety (SCL-90)",
+                       "depression (SCL-90)",
+                       "hostility (SCL-90)",
+                       "phobic anxiety (SCL-90)",
+                       "paranoid ideation (SCL-90)",
+                       "somatization (SCL-90)",
+                       "obsessive-compulsive (SCL-90)",
+                       "interpersonal sensitivity (SCL-90)",
+                       "state depression (ST-Dep)",
+                       "trait depression (ST-Dep)",
+                       "trait anxiety (STAI-T)",
+                       "state anxiety (STAI-S)")
+write.csv(bd_temporal2, "bd_temporal_english.csv")
+```
+
+**Nota**Hay que revisar si cambia en algo que tenga 2 veces *score_dep* y si afecta en algo los resultados
+bd_sociales: nos quedmos con 1160 observaciones, 29 partipantes, 19 variables
+bd_temporal: nos quedamos con 725 observaciones, 29 participantes, y 21 variables.
+
+```{r Grafico de valores perdidos}
+library(visdat)
+vis_miss(bd_sociales2)
+vis_miss(bd_temporal2)
+```
+# Paso 2: Regresión logistica.
+
+```{r Formateo de la variable objetivo, warning=F}
+library(plyr)
+bd_sociales2$key_resp_2.keys<-revalue(bd_sociales2$key_resp_2.keys,
+  c(left="1", right="0"))
+bd_sociales2$key_resp_2.keys<-as.numeric(bd_sociales2$key_resp_2.keys)
+
+bd_temporal2$key_resp.keys<-revalue(bd_temporal2$key_resp.keys,
+  c(left="1", right="0"))
+bd_temporal2$key_resp.keys<-as.numeric(bd_temporal2$key_resp.keys)
+```
+
+Ahora si, aplicamos el modelo de regresion logistica considerando las variables predictoras.
+
+NOTA: 
+- En el paradigma de decisiones sociales, 1 = sí castiga, 2 = no.castiga.
+- En el paradigma de decisiones temporales, 1 = prefiere la recompensa inmediata, 2 = prefiere la recompensa diferida.
+
+Un coeficiente negativo en un modelo de regresión logística indica una disminución en la probabilidad del evento a medida que la variable independiente aumenta.
+
+## 2.1 Regresion logística bd_social
+
+```{r Regresion lineal de bd_sociales}
+# ~. , supongo que esta es la manera en la que nos de todas la varibles sin escribirlas manualmente.
+bd_soc_modelo<-glm(key_resp_2.keys ~.,
+                        data = bd_sociales2,
+                        family = "binomial")
+summary(bd_soc_modelo)
+```
+
+## 2.2 Regresion logística bd_temporal
+
+```{r Regresion lineal bd_temporal}
+bd_tem_modelo<-glm(key_resp.keys ~.,
+                        data = bd_temporal2,
+                        family = "binomial")
+summary(bd_tem_modelo)
+```
+
+# Paso 3: Stepwise 
+
+Ahora, aplicar a la regresion un Stepwise backward induction, para quedarnos con las más relevantes.
+
+Stepwise hacia atrás (backward stepwise): Comienza con un modelo que incluye todas las variables independientes y elimina gradualmente las variables que tienen el menor impacto en el modelo. El proceso continúa hasta que no se pueden eliminar más variables o hasta que se cumple un criterio de parada.
+
+Algunos de los criterios comunes utilizados en la selección de variables stepwise incluyen el valor p, el criterio AIC (Criterio de Información de Akaike), el criterio BIC (Criterio de Información Bayesiana) o la validación cruzada, entre otros.
+
+## 3.1 Stepwise de datos sociales
+```{r Stepwise.bd_sociales}
+bd_soc_modelo_step<-step(bd_soc_modelo,
+                    direction = "backward",
+                    scope=formula(bd_soc_modelo),
+                    trace=0)
+bd_soc_modelo_step$anova
+summary(bd_soc_modelo_step)
+parametros_step_wise_sociales<-summary(bd_soc_modelo_step)
+parametros_step_wise_sociales<-parametros_step_wise_sociales[["coefficients"]]
+parametros_step_wise_sociales<-as.data.frame(parametros_step_wise_sociales)
+parametros_step_wise_sociales$Exp<-exp(parametros_step_wise_sociales$Estimate)
+parametros_step_wise_sociales<-round(parametros_step_wise_sociales, digits = 4)
+write.csv(parametros_step_wise_sociales, file = "parametros_step_wise_sociales.csv")
+```
+<https://rpubs.com/Joaquin_AR/229736>
+
+```{r Lilelihood ratio social}
+# Diferencia de residuos
+dif_residuos <- bd_soc_modelo_step$null.deviance - bd_soc_modelo_step$deviance
+  
+# Grados libertad
+df <- bd_soc_modelo_step$df.null - bd_soc_modelo_step$df.residual
+# p-value
+p_value <- pchisq(q = dif_residuos,df = df, lower.tail = FALSE)
+
+paste("Diferencia de residuos:", round(dif_residuos, 4))
+paste("Grados de libertad:", df)
+paste("p-value:", round(p_value, 4))
+```
+
+El modelo sí es significativo en su conjunto
+
+El intercepto no lo interpretamos, porque no es significativo.
+
+Interpretación opciónA: Las probabilidades de que una persona castigue, se multiplican en 0.6698623 por cada chocolate en que aumente el costo del castigo.
+
+Por cada unidad que incrementa el costo del castigo, los odds de castigar se reducen en promedio 0.6698623 
+
+Interpretación opciónB: Las probabilidades de una persona castigue, se multiplican en 1.0141556 por cada punto porcentual que aumente el castigo.
+
+Interpretación Remisión: Si la persona está en remisión, las probilidades de que castigue se multiplican por 156.8165052
+
+## 3.2 Stepwise de datos temporales
+```{r Stepwise.bd_temporal}
+bd_tem_modelo_step<-step(bd_tem_modelo,
+                    direction = "backward",
+                    scope=formula(bd_tem_modelo),
+                    trace=0)
+bd_tem_modelo_step$anova
+summary(bd_tem_modelo_step)
+parametros_step_wise_temporales<-summary(bd_tem_modelo_step)
+parametros_step_wise_temporales<-parametros_step_wise_temporales[["coefficients"]]
+parametros_step_wise_temporales<-as.data.frame(parametros_step_wise_temporales)
+parametros_step_wise_temporales$Exp<-exp(parametros_step_wise_temporales$Estimate)
+parametros_step_wise_temporales<-round(parametros_step_wise_temporales, digits = 4)
+parametros_step_wise_temporales
+write.csv(parametros_step_wise_temporales, file = "parametros_step_wise_temporales.csv")
+```
+
+```{r Lilelihood ratio temporal}
+# Diferencia de residuos
+dif_residuos2 <- bd_tem_modelo_step$null.deviance - bd_tem_modelo_step$deviance
+  
+# Grados libertad
+df2 <- bd_tem_modelo_step$df.null - bd_tem_modelo_step$df.residual
+# p-value
+p_value2 <- pchisq(q = dif_residuos2,df = df2, lower.tail = FALSE)
+
+paste("Diferencia de residuos:", round(dif_residuos2, 4))
+paste("Grados de libertad:", df2)
+paste("p-value2:", round(p_value2, 4))
+```
+
+El modelo sí es significativo en su conjunto
+
+```{r Interpretación de resultados temporal}
+exp(coef(bd_tem_modelo_step))
+format(exp(coef(bd_tem_modelo_step)), scientific=F)
+```
+
+# Paso 4 Regresion logistica y validacion cruzada
+
+La validación cruzada es una técnica esencial para evaluar y comparar modelos de aprendizaje automático y garantizar que sean capaces de generalizar bien a datos no vistos. Ayuda a identificar problemas de sobreajuste y subajuste, y proporciona una estimación más precisa del rendimiento del modelo.
+
+## 4.1 Regresion logistica y validacion cruzada  de datos sociales
+```{r Regresion logistica con validacion cruzada (social)}
+bd_sociales3<-bd_sociales2 %>%
+  select(key_resp_2.keys, 
+         age,
+         `quality of life`,
+         `reaction time`,
+         `personal cost`,
+         `punishment size`,
+         remission,
+         `glucocorticoids dose`,
+         `anxiety (SCL-90)`,
+         `depression (SCL-90)`,
+         `hostility (SCL-90)`,
+         `paranoid ideation (SCL-90)`,
+         `somatization (SCL-90)`,
+         `obsessive-compulsive (SCL-90)`,
+         `interpersonal sensitivity (SCL-90)`,
+         `state depression (ST-Dep)`,
+         `trait depression (ST-Dep)`,
+         `state anxiety (STAI-S)`,
+         `socioeconomic status`
+         )
+bd_sociales3$key_resp_2.keys<-as.factor(bd_sociales3$key_resp_2.keys)
+#bd_sociales3$key_resp_2.keys<-relevel(bd_sociales3$key_resp_2.keys, ref = "1")
+# Es para que R tome 1 {castigar como referencia}. [1,0],[Castigar, no castigar], respectivamente.
+library(caret)
+modelsoc_vc<-train(key_resp_2.keys ~. ,
+                   data=bd_sociales3,
+                   method="glm",
+                   family="binomial",
+                   trControl= trainControl(method="cv",
+                                             number=10,
+                                             sampling = "up"))
+summary(modelsoc_vc) #Resumen del modelo
+library(vip)
+vip(modelsoc_vc, num_features = 25)
+# Exploramos algunos parámetros del modelo
+modelsoc_vc[["results"]]
+modelsoc_vc$results
+
+# Agrupo los resultados en un dataframe y lo exporto a CSV
+parametros_cross_validation_sociales<-summary(modelsoc_vc)
+parametros_cross_validation_sociales<-parametros_cross_validation_sociales[["coefficients"]]
+parametros_cross_validation_sociales<-as.data.frame(parametros_cross_validation_sociales)
+parametros_cross_validation_sociales$Exp<-exp(parametros_cross_validation_sociales$Estimate)
+parametros_cross_validation_sociales<-round(parametros_cross_validation_sociales, digits = 4)
+parametros_cross_validation_sociales
+# Ahora calculo y añado el % de cambio en los odds (razón de probabilidad) de castigar
+parametros_cross_validation_sociales$Variacion_odds_porcentual<- round(  (parametros_cross_validation_sociales$Exp)*(100)-100, digits = 2)
+# Exporto
+write.csv(parametros_cross_validation_sociales, file = "parametros_cross_validation_sociales.csv")
+# Integro la importancia relativa a la tabla de parámetros cross validation
+parametros.cross.validation.sociales<-read.csv("parametros_cross_validation_sociales.csv")
+names(parametros.cross.validation.sociales)[1]<-"Variable"
+# Quito el intercepto de las variables, porque no nos interesa su interpretación.
+parametros.cross.validation.sociales<-parametros.cross.validation.sociales %>%
+  filter(Variable!=	"(Intercept)")
+# Separo las variables que están bien escritas
+variables.correctas.2<-parametros.cross.validation.sociales%>%
+  filter(Variable=="age" | Variable=="remission")
+variables.incorrectas.2<-parametros.cross.validation.sociales%>%
+  filter(Variable!="age" & Variable!="remission")
+# Eliminamos las barras de escape
+library(stringr)
+variables.incorrectas.2$Corregidas<-variables.corregidas.2<-substr(variables.incorrectas.2$Variable,4,nchar(variables.incorrectas.2$Variable)-3)
+variables.corregidas.2 <- variables.incorrectas.2
+variables.corregidas.2$Variable<-variables.corregidas.2$Corregidas
+variables.corregidas.2<-variables.corregidas.2 %>%
+  select(-Corregidas)
+# Junto todas las variables
+variables.corregidas.2<-rbind(variables.correctas.2, variables.corregidas.2)
+# Agrego la importancia relativa
+importancia.relativa.soc$Variable %in% variables.corregidas.2$Variable 
+# Verifico que todas las variables estén presentes.
+# Ahora integramos ambas bases de datos
+parametros_cross_validation_social_por_importancia<-merge(variables.corregidas.2, importancia.relativa.soc)
+order()
+parametros_cross_validation_social_por_importancia<-parametros_cross_validation_social_por_importancia[order(parametros_cross_validation_social_por_importancia$Importance, decreasing = T),]
+# Exporto la tabla de resultados
+write.csv(parametros_cross_validation_social_por_importancia,
+          file = "parametros_cross_validation_sociales_por_importancia.csv")
+```
+
+
+```{r Importancia relativa y grafica (social)}
+# Extraemos la importancia relativa
+importancia.relativa.soc <- vi(modelsoc_vc)
+# Redondeo a un dígito el porcentaje
+importancia.relativa.soc$Importance<-round(importancia.relativa.soc$Importance, digits = 1)
+# Separo las variables que están bien escritas
+variables.correctas<-importancia.relativa.soc%>%
+  filter(Variable=="age" | Variable=="remission")
+variables.incorrectas<-importancia.relativa.soc%>%
+  filter(Variable!="age" & Variable!="remission")
+# Eliminamos las barras de escape
+library(stringr)
+variables.incorrectas$Corregidas<-variables.corregidas<-substr(variables.incorrectas$Variable,4,nchar(variables.incorrectas$Variable)-3)
+variables.corregidas <- variables.incorrectas[,c(3,2)]
+names(variables.corregidas)[1]<-"Variable"
+# Junto todas las variables
+importancia.relativa.soc<-rbind(variables.correctas, variables.corregidas)
+importancia.relativa.soc<-importancia.relativa.soc[order(-importancia.relativa.soc$Importance),]
+
+# Graficamos
+library(tidyverse)
+library(ggtext) # Para agregar anotaciones
+grafico.importancia.modelo.decisiones.sociales <-ggplot(data = importancia.relativa.soc,
+       aes(x=Importance,y=Variable))+
+  geom_col(alpha=0.5)+
+  theme_classic()+
+  geom_text(aes(label= Importance), position=position_dodge(width=0.9), vjust=0, hjust=-0.2, size = 2.5)+
+  scale_y_discrete(limits=c("reaction time",
+                            "state depression (ST-Dep)",
+                            "socioeconomic status",
+                            "anxiety (SCL-90)",
+                            "obsessive-compulsive (SCL-90)",
+                            "depression (SCL-90)",
+                            "quality of life",
+                            "paranoid ideation (SCL-90)",
+                            "trait depression (ST-Dep)",
+                            "state anxiety (STAI-S)",
+                            "punishment size",
+                            "interpersonal sensitivity (SCL-90)",
+                            "somatization (SCL-90)",
+                            "glucocorticoids dose",
+                            "remission",
+                            "age",
+                            "hostility (SCL-90)",
+                            "personal cost"
+                            
+                            ))+
+ggtitle("Normalized importance \nof predictor variables for social decisions")+
+  ylab("Predictor variables")+
+  xlab("Relative importance")+
+  geom_richtext(aes(x = 80, y = 4,
+                    label = "**Validated model fitting** 
+                                  \n Accuracy: 0.7417 (S.D. 0.0371)
+                                  \n Kappa: 0.4831 (S.D. 0.0751)
+                                  \n AIC: 1294.4"),
+                size=2.5)
+grafico.importancia.modelo.decisiones.sociales
+ggsave("Importancia.variables.modelo.decisiones.sociales.2.png",
+       plot=grafico.importancia.modelo.decisiones.sociales,
+       device = png(),
+       width = 20,
+       height = 10,
+       units = "cm",
+       dpi = 300)
+
+ggsave("Importancia.variables.modelo.decisiones.sociales.3.png",
+       plot=grafico.importancia.modelo.decisiones.sociales,
+       device = png(),
+       width = 18,
+       height = 10,
+       units = "cm",
+       dpi = 400)
+
+```
+
+## 4.2 Regresion logistica y validacion cruzada  de datos temporales
+
+Por cuestiones de homogenizacion se cambio el termino de economica a *temporal*
+
+````{r Regresion logistica con validacion cruzada (temporal)}
+bd_temporal3<-bd_temporal2 %>%
+  select(key_resp.keys,
+         sex,
+         `age group`,
+         `socioeconomic status`,
+         `quality of life`,
+         remission,
+         `gaining rate`,
+         `glucocorticoids consumption`,
+         `anxiety (SCL-90)`,
+         `depression (SCL-90)`,
+         `hostility (SCL-90)`,
+         `paranoid ideation (SCL-90)`,
+         `somatization (SCL-90)`,
+         `obsessive-compulsive (SCL-90)`,
+         `interpersonal sensitivity (SCL-90)`,
+         `state depression (ST-Dep)`,
+         `trait depression (ST-Dep)`,
+         `state anxiety (STAI-S)`
+         )
+
+bd_temporal3$key_resp.keys<-as.factor(bd_temporal3$key_resp.keys) # que se vuelva factor hace la direncia?
+# bd_temporal3$key_resp.keys<-relevel(bd_temporal3$key_resp.keys, ref = "1")
+# Es para que R tome 1 {recompensa inmediata}. [1,0],[recompensa inmediata, espera], respectivamente. o bien tambien puede ser visto como[no esperar, esperar]
+
+library(caret)
+model_vc_temp <- train(key_resp.keys ~.  ,
+                 
+                data = bd_temporal3,
+                method = "glm",
+                family = "binomial",
+                trControl = trainControl(method = "cv", 
+                                         number = 10, 
+                                         sampling = "up"))
+summary(model_vc_temp) # Resumen del modelo
+library(vip)
+vip(model_vc_temp, num_features = 25)
+# Exploramos algunos parámetros del modelo
+model_vc_temp[["results"]]
+model_vc_temp$results
+
+# Agrupo los resultados en un dataframe y lo exporto a CSV
+######## NOTA:tengo que adaptar las siguientes líneas a temporales############
+parametros_cross_validation_temporales<-summary(model_vc_temp)
+parametros_cross_validation_temporales<-parametros_cross_validation_temporales[["coefficients"]]
+parametros_cross_validation_temporales<-as.data.frame(parametros_cross_validation_temporales)
+parametros_cross_validation_temporales$Exp<-exp(parametros_cross_validation_temporales$Estimate)
+parametros_cross_validation_temporales<-round(parametros_cross_validation_temporales, digits = 4)
+parametros_cross_validation_temporales
+write.csv(parametros_cross_validation_temporales, file = "parametros_cross_validation_temporales.csv")
+
+# Ahora calculo y añado el % de cambio en los odds (razón de probabilidad) de castigar
+parametros_cross_validation_temporales$Variacion_odds_porcentual<- round(  (parametros_cross_validation_temporales$Exp)*(100)-100, digits = 2)
+write.csv(parametros_cross_validation_temporales, file = "parametros_cross_validation_temporales.csv")
+# Integro la importancia relativa a la tabla de parámetros cross validation
+parametros.cross.validation.temporales<-read.csv("parametros_cross_validation_temporales.csv")
+names(parametros.cross.validation.temporales)[1]<-"Variable"
+# Quito el intercepto de las variables, porque no nos interesa su interpretación.
+parametros.cross.validation.temporales<-parametros.cross.validation.temporales %>%
+  filter(Variable!=	"(Intercept)")
+# Separo las variables que están bien escritas
+variables.correctas.3<-parametros.cross.validation.temporales%>%
+  filter(Variable=="sex" | Variable=="remission")
+variables.incorrectas.3<-parametros.cross.validation.temporales%>%
+  filter(Variable!="sex" & Variable!="remission")
+# Eliminamos las barras de escape
+library(stringr)
+variables.incorrectas.3$Corregidas<-variables.corregidas.3<-substr(variables.incorrectas.3$Variable,4,nchar(variables.incorrectas.3$Variable)-3)
+variables.corregidas.3 <- variables.incorrectas.3
+variables.corregidas.3$Variable<-variables.corregidas.3$Corregidas
+variables.corregidas.3<-variables.corregidas.3 %>%
+  select(-Corregidas)
+# Junto todas las variables
+variables.corregidas.3<-rbind(variables.correctas.3, variables.corregidas.3)
+# Agrego la importancia relativa
+importancia.relativa.temp$Variable %in% variables.corregidas.3$Variable
+# Verifico que todas las variables estén presentes.
+# Ahora integramos ambas bases de datos
+parametros_cross_validation_temporales_por_importancia<-merge(variables.corregidas.3, importancia.relativa.temp)
+parametros_cross_validation_temporales_por_importancia<-parametros_cross_validation_temporales_por_importancia[order(parametros_cross_validation_temporales_por_importancia$Importance, decreasing = T),]
+# Exporto la tabla de resultados
+write.csv(parametros_cross_validation_temporales_por_importancia,
+          file = "parametros_cross_validation_temporales_por_importancia.csv")
+
+```
+
+
+````{r Importancia relativa y grafica (temporal)}
+# Extraemos la importancia relativa
+importancia.relativa.temp <- vi(model_vc_temp)
+# Redondeo a un dígito el porcentaje
+importancia.relativa.temp$Importance<-round(importancia.relativa.temp$Importance, digits = 1)
+# Separo las variables que están bien escritas
+variables.correctas.2<-importancia.relativa.temp%>%
+  filter(Variable=="sex" | Variable=="remission")
+variables.incorrectas.2<-importancia.relativa.temp%>%
+  filter(Variable!="sex" & Variable!="remission")
+# Eliminamos las barras de escape
+library(stringr)
+variables.incorrectas.2$Corregidas<-substr(variables.incorrectas.2$Variable,4,nchar(variables.incorrectas.2$Variable)-3)
+variables.corregidas.2 <- variables.incorrectas.2[,c(3,2)]
+names(variables.corregidas.2)[1]<-"Variable"
+# Junto todas las variables
+importancia.relativa.temp<-rbind(variables.correctas.2, variables.corregidas.2)
+importancia.relativa.temp<-importancia.relativa.temp[order(-importancia.relativa.temp$Importance),]
+# En esta parte voy a corregir corticoides por glucocorticoides
+library(plyr)
+importancia.relativa.temp
+# Graficamos
+library(tidyverse)
+library(ggtext) # Para agregar anotaciones
+grafico.importancia.modelo.decisiones.temporales <-
+  ggplot(data = importancia.relativa.temp,
+   aes(x=Importance,y=Variable))+
+   geom_col(alpha=0.5)+
+   theme_classic()+
+   geom_text(aes(label= Importance), position=position_dodge(width=0.9), vjust=0, hjust=-0.2, 
+             size = 2.5)+
+  scale_y_discrete(limits=c("somatization (SCL-90)",
+                            "age group",
+                            "interpersonal sensitivity (SCL-90)",
+                            "state anxiety (STAI-S)" ,
+                            "trait depression (ST-Dep)",
+                            "sex",
+                            "state depression (ST-Dep)" ,
+                            "hostility (SCL-90)",
+                            "glucocorticoids consumption",
+                            "socioeconomic status",
+                            "quality of life",
+                            "gaining rate",
+                            "depression (SCL-90)",
+                            "paranoid ideation (SCL-90)",
+                            "remission",
+                            "obsessive-compulsive (SCL-90)",
+                            "anxiety (SCL-90)"
+                            ))+
+
+  ggtitle("Normalized importance \n of predictor variables for temporal decisions")+
+  xlab("Relative importance")+
+  ylab("Predictor variables") +
+  geom_richtext(aes(x = 80, y = 4,
+                    label = "**Validated model fitting** 
+                                  \n Accuracy: 0.8000 (S.D. 0.0343)
+                                  \n Kappa: 0.5741 (S.D. 0.0707)
+                                  \n AIC: 848.6"),
+                size=2.5)
+grafico.importancia.modelo.decisiones.temporales
+ggsave("Importancia.variables.modelo.decisiones.temporales.2.png",
+       plot=grafico.importancia.modelo.decisiones.temporales,
+       device = png(),
+       width = 20,
+       height = 10,
+       units = "cm",
+       dpi = 300)
+
+ggsave("Importancia.variables.modelo.decisiones.temporales.3.png",
+       plot=grafico.importancia.modelo.decisiones.temporales,
+       device = png(),
+       width = 18,
+       height = 10,
+       units = "cm",
+       dpi = 400)
+```
+
