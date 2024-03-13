@@ -178,8 +178,8 @@ bd_temporal2$key_resp.keys<-as.numeric(bd_temporal2$key_resp.keys)
 Ahora si, aplicamos el modelo de regresion logistica considerando las variables predictoras.
 
 NOTA: 
-- En el paradigma de decisiones sociales, 1 = sí castiga, 2 = no.castiga.
-- En el paradigma de decisiones temporales, 1 = prefiere la recompensa inmediata, 2 = prefiere la recompensa diferida.
+- En el paradigma de decisiones sociales, 1 = sí castiga, 0 = no.castiga.
+- En el paradigma de decisiones temporales, 1 = prefiere la recompensa inmediata, 0 = prefiere la recompensa diferida.
 
 Un coeficiente negativo en un modelo de regresión logística indica una disminución en la probabilidad del evento a medida que la variable independiente aumenta.
 
